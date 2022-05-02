@@ -1,7 +1,7 @@
-/* global preloadImagesTmr fxrand */
+/* global preloadImagesTmr fxhash fxrand paper1Loaded */
 
 //
-//  fxhash - background paper
+//  fxhash - 33rpm
 //
 //
 //  HELLO!! Code is copyright revdancatt (that's me), so no sneaky using it for your
@@ -17,13 +17,12 @@
 //  https://youtube.com/revdancatt
 //
 
-const ratio = 1.41
-const startTime = new Date().getTime() // so we can figure out how long since the scene started
+const ratio = 1
+// const startTime = new Date().getTime() // so we can figure out how long since the scene started
 let drawn = false
 let highRes = false // display high or low res
 const features = {}
 let nextFrame = null
-let paper1Pattern = null
 
 window.$fxhashFeatures = {}
 
@@ -40,6 +39,13 @@ const makeFeatures = () => {
       y: fxrand()
     }
   }
+  features.inchToCm = 2.54
+  features.speed = 33.333333 // rpm
+  features.size = 12 * features.inchToCm // cm
+  features.hole = 7.14375 / 10 // cm
+  features.duration = 22 // minutes
+  features.rotations = features.speed * features.duration // errr, rotations
+  features.labelSize = 10 // cm
 }
 
 //  Call the above make features, so we'll have the window.$fxhashFeatures available
@@ -154,6 +160,16 @@ const drawCanvas = async () => {
     ctx.fillRect(0, 0, w, h)
     ctx.globalCompositeOperation = 'source-over'
   }
+
+  //  do all the sizes
+  const scaleMod = 0.8
+  const outerRadius = ((features.size / (12 * features.inchToCm)) / 2) * scaleMod
+  ctx.lineWidth = w / 1000
+  ctx.strokeStyle = 'black'
+  ctx.beginPath()
+  ctx.arc(w / 2, h / 2, outerRadius * w, 0, 2 * Math.PI)
+  ctx.stroke()
+
   //  Now do it all over again
   nextFrame = window.requestAnimationFrame(drawCanvas)
 }
