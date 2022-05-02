@@ -22,7 +22,7 @@ const ratio = 1
 let drawn = false
 let highRes = false // display high or low res
 const features = {}
-let nextFrame = null
+const nextFrame = null
 
 window.$fxhashFeatures = {}
 
@@ -43,9 +43,110 @@ const makeFeatures = () => {
   features.speed = 33.333333 // rpm
   features.size = 12 * features.inchToCm // cm
   features.hole = 7.14375 / 10 // cm
-  features.duration = 22 // minutes
+  features.duration = 22 / 10 // minutes
   features.rotations = features.speed * features.duration // errr, rotations
   features.labelSize = 10 // cm
+
+  //  Now we want to work out how many tracks there are
+  let trackCount = 4
+  //  There is a 33% chance that there's a different number of tracks
+  if (fxrand() < 0.33) {
+    trackCount = 5 // default to 5
+    if (fxrand() < 0.4) trackCount = 3 // but possibly 3
+    //  Maybe a very extreme count
+    if (fxrand() < 0.25) {
+      trackCount = 6
+      if (fxrand() < 0.4) trackCount = 2
+    }
+  }
+  //  Now that we know how many tracks we have, we need to work out the lengths of them
+  features.tracks = []
+  features.leadIn = 2 // seconds
+  features.leadOut = 4 // seconds
+  features.gap = 2 // seconds
+  features.fade = 2 // seconds
+  features.runTime = features.duration * 60 // seconds
+  features.playTime = features.runTime - features.leadIn - features.leadOut - ((trackCount - 1) * features.gap)
+  features.averageTrackLength = features.playTime / trackCount
+  let startTime = features.leadIn
+  let remainingTime = features.playTime
+  for (let t = 0; t < trackCount - 1; t++) {
+    const track = {
+      index: t + 1
+    }
+    track.start = startTime
+    track.trackLength = Math.floor(((fxrand() / 10 * 4) + 0.8) * features.averageTrackLength)
+    track.end = track.start + track.trackLength
+    track.bmp = Math.floor(fxrand() * 30) + 100
+    features.tracks.push(track)
+    remainingTime -= track.trackLength
+    startTime += track.trackLength + features.gap
+  }
+  //  Now put on the last track
+  features.tracks.push({
+    index: trackCount,
+    start: startTime,
+    trackLength: remainingTime,
+    end: startTime + remainingTime,
+    bmp: Math.floor(fxrand() * 30) + 100
+  })
+  const startAnglesStep = 360 / 90
+  const endAnglesStep = 360 / 360
+  const maxTotalAngles = 360 * features.rotations
+  let remainingAngles = maxTotalAngles
+  features.track = []
+  let currentAngle = 0
+
+  while (remainingAngles > 0) {
+    //  How far along are we
+    const percent = remainingAngles / maxTotalAngles
+    //  create the point
+    const point = {
+      radius: percent,
+      angle: currentAngle,
+      timeStamp: features.runTime * (1 - percent),
+      bump: 1
+    }
+    //  Work out how far through all the tracks we are
+    //  const currentSeconds = features.runTime * percent
+    //  1. Now figure out if we are in a track or not
+    const currentSecond = features.runTime * (1 - percent)
+    for (const track of features.tracks) {
+      if (point.timeStamp >= track.start && currentSecond <= track.end) {
+        point.bump = 2
+        //  If we are at the start
+        const fadeEnd = track.start + features.fade
+        const fadeStart = track.end - features.fade
+        //  Work out the fade into the start of the track
+        if (point.timeStamp <= fadeEnd) {
+          const startFadePercent = 1 - ((fadeEnd - point.timeStamp) / features.fade)
+          point.bump = 1 + startFadePercent
+        }
+        //  Work out the fade at the end
+        if (point.timeStamp >= fadeStart) {
+          const endFadePercent = 1 - ((point.timeStamp - fadeStart) / features.fade)
+          point.bump = 1 + endFadePercent
+        }
+
+        //  Work out how far we are into the track
+        const timeInTrack = point.timeStamp - track.start
+      }
+    }
+    //  2. If we're in the track, figure out the bpm
+    //  3. Additional noise wobble
+    //  4. Take the fade into effect
+
+    //  Work out how much we need to turn next time, somewhere between the outer angle
+    //  and the inner angle
+    const angle = startAnglesStep + ((endAnglesStep - startAnglesStep) * percent)
+    //  Knock it off from the remaining angles, until we've been through everything
+    currentAngle += angle
+    while (currentAngle >= 360) currentAngle -= 360
+    remainingAngles -= angle
+    //  Put the point into the track
+    features.track.push(point)
+  }
+  console.log(features)
 }
 
 //  Call the above make features, so we'll have the window.$fxhashFeatures available
@@ -163,6 +264,7 @@ const drawCanvas = async () => {
 
   //  do all the sizes
   const scaleMod = 0.8
+
   const outerRadius = ((features.size / (12 * features.inchToCm)) / 2) * scaleMod
   ctx.lineWidth = w / 1000
   ctx.strokeStyle = 'black'
@@ -170,8 +272,49 @@ const drawCanvas = async () => {
   ctx.arc(w / 2, h / 2, outerRadius * w, 0, 2 * Math.PI)
   ctx.stroke()
 
+  const labelRadius = ((features.labelSize / (12 * features.inchToCm)) / 2) * scaleMod
+  ctx.lineWidth = w / 1000
+  ctx.strokeStyle = 'black'
+  ctx.beginPath()
+  ctx.arc(w / 2, h / 2, labelRadius * w, 0, 2 * Math.PI)
+  ctx.stroke()
+
+  const holeRadius = ((features.hole / (12 * features.inchToCm)) / 2) * scaleMod
+  ctx.lineWidth = w / 1000
+  ctx.strokeStyle = 'black'
+  ctx.beginPath()
+  ctx.arc(w / 2, h / 2, holeRadius * w, 0, 2 * Math.PI)
+  ctx.stroke()
+
+  //  Get the first point
+  const trackArea = (outerRadius - labelRadius)
+  const border = trackArea * 0.05
+  const trackOuterRadius = outerRadius - (border / 2)
+  const trackInnerRadius = labelRadius + (border / 2)
+  const trackDiffRadius = trackOuterRadius - trackInnerRadius
+  const lineWidth = trackDiffRadius / features.rotations * w / 4
+
+  const pi = Math.PI
+
+  for (let p = 1; p < features.track.length; p++) {
+    ctx.beginPath()
+    const point0 = features.track[p - 1]
+    const radius0 = (trackInnerRadius * w) + (trackDiffRadius * point0.radius * w)
+    const x0 = Math.sin(point0.angle * pi / 180) * radius0
+    const y0 = Math.cos(point0.angle * pi / 180) * radius0
+    ctx.moveTo(x0 + (w / 2), y0 + (h / 2))
+
+    const point = features.track[p]
+    const radius = (trackInnerRadius * w) + (trackDiffRadius * point.radius * w)
+    const x = Math.sin(point.angle * pi / 180) * radius
+    const y = Math.cos(point.angle * pi / 180) * radius
+    ctx.lineWidth = lineWidth * point.bump
+    ctx.lineTo(x + (w / 2), y + (h / 2))
+    ctx.stroke()
+  }
+  // ctx.stroke()
   //  Now do it all over again
-  nextFrame = window.requestAnimationFrame(drawCanvas)
+  // nextFrame = window.requestAnimationFrame(drawCanvas)
 }
 
 const autoDownloadCanvas = async (showHash = false) => {
