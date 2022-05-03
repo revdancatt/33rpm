@@ -1,7 +1,7 @@
-/* global preloadImagesTmr fxhash fxrand paper1Loaded */
+/* global preloadImagesTmr fxhash fxrand paper1Loaded Path2D */
 
 //
-//  fxhash - 33rpm
+//  fxhash - 33⅓rpm
 //
 //
 //  HELLO!! Code is copyright revdancatt (that's me), so no sneaky using it for your
@@ -47,6 +47,54 @@ const makeFeatures = () => {
   features.rotations = features.speed * features.duration // errr, rotations
   features.labelSize = 10 // cm
 
+  const labelColours = [{
+    h: 353,
+    s: 98,
+    l: 74
+  }, {
+    h: 39,
+    s: 100,
+    l: 74
+  }, {
+    h: 241,
+    s: 77,
+    l: 87
+  }, {
+    h: 142,
+    s: 100,
+    l: 71
+  }]
+  const altLabelColours = [{
+    h: 299,
+    s: 99,
+    l: 73
+  }, {
+    h: 46,
+    s: 41,
+    l: 50
+  }, {
+    h: 201,
+    s: 21,
+    l: 77
+  }]
+  //  Pick the label colour
+  features.label1Choice = Math.floor(fxrand() * labelColours.length)
+  features.label1Colour = labelColours[features.label1Choice]
+  if (fxrand() < 0.18) {
+    features.label1Choice = Math.floor(fxrand() * altLabelColours.length)
+    features.label1Colour = altLabelColours[features.label1Choice]
+  }
+  //  And the second label colour
+  features.label2Choice = Math.floor(fxrand() * labelColours.length)
+  features.label2Colour = labelColours[features.label2Choice]
+  if (fxrand() < 0.18) {
+    features.label2Choice = Math.floor(fxrand() * altLabelColours.length)
+    features.label2Colour = altLabelColours[features.label2Choice]
+  }
+  features.labelAngle = Math.floor(fxrand() * 360)
+  features.labelOffsetX = (fxrand() * 2) - 1
+  features.labelOffsetY = (fxrand() * 2) - 1
+
   //  Now we want to work out how many tracks there are
   let trackCount = 4
   //  There is a 33% chance that there's a different number of tracks
@@ -77,7 +125,7 @@ const makeFeatures = () => {
     track.start = startTime
     track.trackLength = Math.floor(((fxrand() / 10 * 4) + 0.8) * features.averageTrackLength)
     track.end = track.start + track.trackLength
-    track.bmp = Math.floor(fxrand() * 30) + 100
+    track.bpm = Math.floor(fxrand() * 30) + 100
     features.tracks.push(track)
     remainingTime -= track.trackLength
     startTime += track.trackLength + features.gap
@@ -88,7 +136,7 @@ const makeFeatures = () => {
     start: startTime,
     trackLength: remainingTime,
     end: startTime + remainingTime,
-    bmp: Math.floor(fxrand() * 30) + 100
+    bpm: Math.floor(fxrand() * 30) + 100
   })
   const startAnglesStep = 360 / 90
   const endAnglesStep = 360 / 360
@@ -130,6 +178,7 @@ const makeFeatures = () => {
 
         //  Work out how far we are into the track
         const timeInTrack = point.timeStamp - track.start
+        point.bump = ((point.bump - 1) * Math.abs(Math.sin((timeInTrack / ((track.bpm / 60) / 2 / 10))) * 4)) + 1
       }
     }
     //  2. If we're in the track, figure out the bpm
@@ -263,7 +312,7 @@ const drawCanvas = async () => {
   }
 
   //  do all the sizes
-  const scaleMod = 0.8
+  const scaleMod = 0.95
 
   const outerRadius = ((features.size / (12 * features.inchToCm)) / 2) * scaleMod
   ctx.lineWidth = w / 1000
@@ -277,13 +326,6 @@ const drawCanvas = async () => {
   ctx.strokeStyle = 'black'
   ctx.beginPath()
   ctx.arc(w / 2, h / 2, labelRadius * w, 0, 2 * Math.PI)
-  ctx.stroke()
-
-  const holeRadius = ((features.hole / (12 * features.inchToCm)) / 2) * scaleMod
-  ctx.lineWidth = w / 1000
-  ctx.strokeStyle = 'black'
-  ctx.beginPath()
-  ctx.arc(w / 2, h / 2, holeRadius * w, 0, 2 * Math.PI)
   ctx.stroke()
 
   //  Get the first point
@@ -308,18 +350,57 @@ const drawCanvas = async () => {
     const radius = (trackInnerRadius * w) + (trackDiffRadius * point.radius * w)
     const x = Math.sin(point.angle * pi / 180) * radius
     const y = Math.cos(point.angle * pi / 180) * radius
-    ctx.lineWidth = lineWidth * point.bump
+    ctx.lineWidth = lineWidth * point.bump * 0.8
     ctx.lineTo(x + (w / 2), y + (h / 2))
     ctx.stroke()
   }
-  // ctx.stroke()
+
+  //  Now do the label
+  ctx.save()
+  ctx.translate(w / 2, h / 2)
+  ctx.rotate(features.labelAngle * Math.PI / 180)
+  ctx.globalCompositeOperation = 'multiply'
+  //  Do the first half of the label
+  ctx.save()
+  const label1 = new Path2D()
+  label1.arc(0, 0, labelRadius * 0.9 * w, 0, 2 * Math.PI)
+  ctx.clip(label1)
+
+  ctx.rect(-w, -h, w * 2, h * 2)
+  ctx.fillStyle = `hsla(${features.label1Colour.h}, ${features.label1Colour.s}%, ${features.label1Colour.l}%, 1)`
+  ctx.fill()
+  ctx.restore()
+
+  //  Do the second half of the label
+  ctx.save()
+  const label2 = new Path2D()
+  label2.arc((w / 400) * features.labelOffsetX, -(h / 200) * features.labelOffsetY, labelRadius * 0.9 * w, 0, 1 * Math.PI)
+  ctx.clip(label2)
+
+  ctx.rect(-w, -h, w * 2, h * 2)
+  ctx.fillStyle = `hsla(${features.label2Colour.h}, ${features.label2Colour.s}%, ${features.label2Colour.l}%, 1)`
+  ctx.fill()
+  ctx.restore()
+  ctx.globalCompositeOperation = 'source-over'
+  ctx.restore()
+
+  //  Draw the hole
+  const holeRadius = ((features.hole / (12 * features.inchToCm)) / 2) * scaleMod
+  ctx.lineWidth = w / 1000
+  ctx.strokeStyle = 'black'
+  ctx.fillStyle = features.paper1Pattern
+  ctx.beginPath()
+  ctx.arc(w / 2, h / 2, holeRadius * w, 0, 2 * Math.PI)
+  ctx.fill()
+  ctx.stroke()
+
   //  Now do it all over again
   // nextFrame = window.requestAnimationFrame(drawCanvas)
 }
 
 const autoDownloadCanvas = async (showHash = false) => {
   const element = document.createElement('a')
-  element.setAttribute('download', `paper_${fxhash}`)
+  element.setAttribute('download', `33rpm_${fxhash}`)
   element.style.display = 'none'
   document.body.appendChild(element)
   let imageBlob = null
