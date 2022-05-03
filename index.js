@@ -77,19 +77,26 @@ const makeFeatures = () => {
     s: 21,
     l: 77
   }]
+  const colourDiscs = ['cyan', 'magenta', 'yellow']
+  if (fxrand() < 0.12) features.vinylColour = colourDiscs[Math.floor(fxrand() * colourDiscs.length)]
+
   //  Pick the label colour
   features.label1Choice = Math.floor(fxrand() * labelColours.length)
   features.label1Colour = labelColours[features.label1Choice]
+  features.label1 = ['England', 'Wales', 'Scotland', 'Ireland'][features.label1Choice]
   if (fxrand() < 0.18) {
     features.label1Choice = Math.floor(fxrand() * altLabelColours.length)
     features.label1Colour = altLabelColours[features.label1Choice]
+    features.label1 = ['Vapor', 'Desolate', 'Ice'][features.label1Choice]
   }
   //  And the second label colour
   features.label2Choice = Math.floor(fxrand() * labelColours.length)
   features.label2Colour = labelColours[features.label2Choice]
+  features.label2 = ['England', 'Wales', 'Scotland', 'Ireland'][features.label2Choice]
   if (fxrand() < 0.18) {
     features.label2Choice = Math.floor(fxrand() * altLabelColours.length)
     features.label2Colour = altLabelColours[features.label2Choice]
+    features.label2 = ['Vapor', 'Desolate', 'Ice'][features.label2Choice]
   }
   features.labelAngle = Math.floor(fxrand() * 360)
   features.labelOffsetX = (fxrand() * 2) - 1
@@ -195,7 +202,23 @@ const makeFeatures = () => {
     //  Put the point into the track
     features.track.push(point)
   }
-  console.log(features)
+
+  window.$fxhashFeatures.tracks = features.tracks.length
+  window.$fxhashFeatures.label = `${features.label1}/${features.label2}`
+  window.$fxhashFeatures['Coloured vinyl'] = 'None'
+  if (features.vinylColour) window.$fxhashFeatures['Coloured vinyl'] = features.vinylColour.charAt(0).toUpperCase() + features.vinylColour.slice(1)
+  for (const track of features.tracks) {
+    window.$fxhashFeatures[`Track ${track.index}`] = secondsToMS(track.trackLength * 10)
+    window.$fxhashFeatures[`Track ${track.index} bpm`] = track.bpm
+  }
+}
+
+const secondsToMS = (s) => {
+  const minutes = Math.floor(s / 60)
+  let seconds = s - minutes * 60
+  if (seconds < 10) seconds = `0${seconds}`
+  if (seconds < 1) seconds = '00'
+  return `${minutes}:${seconds}`
 }
 
 //  Call the above make features, so we'll have the window.$fxhashFeatures available
@@ -319,6 +342,14 @@ const drawCanvas = async () => {
   ctx.strokeStyle = 'black'
   ctx.beginPath()
   ctx.arc(w / 2, h / 2, outerRadius * w, 0, 2 * Math.PI)
+  if (features.vinylColour) {
+    ctx.fillStyle = features.vinylColour
+    ctx.globalCompositeOperation = 'multiply'
+    ctx.globalAlpha = 0.3
+    ctx.fill()
+    ctx.globalCompositeOperation = 'source-over'
+    ctx.globalAlpha = 1
+  }
   ctx.stroke()
 
   const labelRadius = ((features.labelSize / (12 * features.inchToCm)) / 2) * scaleMod
@@ -326,7 +357,13 @@ const drawCanvas = async () => {
   ctx.strokeStyle = 'black'
   ctx.beginPath()
   ctx.arc(w / 2, h / 2, labelRadius * w, 0, 2 * Math.PI)
+  // ctx.fill()
   ctx.stroke()
+
+  ctx.fillStyle = features.paper1Pattern
+  ctx.beginPath()
+  ctx.arc(w / 2, h / 2, labelRadius * 0.95 * w, 0, 2 * Math.PI)
+  ctx.fill()
 
   //  Get the first point
   const trackArea = (outerRadius - labelRadius)
@@ -397,7 +434,6 @@ const drawCanvas = async () => {
   //  Now do it all over again
   // nextFrame = window.requestAnimationFrame(drawCanvas)
 }
-
 const autoDownloadCanvas = async (showHash = false) => {
   const element = document.createElement('a')
   element.setAttribute('download', `33rpm_${fxhash}`)
